@@ -1,5 +1,5 @@
 function result = chpratingbackend_v21(input)
-% This is the Approach 1
+
 %% initial output table
 result = table;
 
