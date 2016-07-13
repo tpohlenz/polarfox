@@ -29,7 +29,7 @@ result.gasholder(:,1) = 0;
 result.TM1_1(:,1) = 0;
 result.TM1_2(:,1) = 0;
 result.TM1_3(:,1) = 0;
-result.usage(:,1) = 0;
+result.usage(:,1) = {'CHP'};
 
 % get partial load powerlevel informations
 phase1 = input.plant.partialload.phase1;
@@ -70,17 +70,17 @@ result.TM1_1(result.phase==phase3.powerlevel) = result.CM_el(result.phase==phase
 
 %% add gas holder 
 % initial TM1_2
-result.TM1_2 = result.TM1_1;
+% result.TM1_2 = result.TM1_1;
 
 % calculate
-result.gasholder(:,1) = input.market.gasprice/input.gasholder.efficiency;
-gasholdercosts = input.market.heatprice - input.market.gasprice/input.gasholder.efficiency;
+% result.gasholder(:,1) = input.market.gasprice/input.gasholder.efficiency;
+% gasholdercosts = input.market.heatprice - input.market.gasprice/input.gasholder.efficiency;
 
-result.TM1_2(result.CM_el < gasholdercosts) = result.heatdemand(result.CM_el < gasholdercosts) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * gasholdercosts;
+% result.TM1_2(result.CM_el < gasholdercosts) = result.heatdemand(result.CM_el < gasholdercosts) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * gasholdercosts;
 
 %% add storagelevel 
 % inital toalprofit2
-result.TM1_3 = result.TM1_2;
+result.TM1_3 = result.TM1_1;
 
 % calculate
 result.storagelevel(1) = 0.5;
@@ -112,16 +112,16 @@ result.storagelevel(1) = 0.5;
         elseif (result.CM_el(i)<0) && ((result.storagelevel(i-1) * input.storage.capacity) >= (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency)))
             result.storagelevel(i) = result.storagelevel(i-1) - (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency))/input.storage.capacity;
             result.TM1_3(i) = result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * input.market.heatprice;
-            % result.usage(i) = 3;
+            result.usage(i) = {'storage'};
             
         % old: charge storage if CM_el is negative but the storage level is to low  
-        % new: use gas holder instead 
+        % new: use gas holder instead --> deactivated
         else
             
-            % result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity; 
-            % if result.storagelevel(i) > 1
-            %    result.storagelevel(i) = 1;
-            % end
+            result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity; 
+            if result.storagelevel(i) > 1
+            result.storagelevel(i) = 1;
+            end
         
         end
     end
