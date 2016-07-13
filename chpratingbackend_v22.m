@@ -1,10 +1,5 @@
 function result = chpratingbackend_v21(input)
 
-% Test Comment
-% Test Comment 2
-% Test Comment 3
-% Test Comment 5
-
 %% initial output table
 result = table;
 
