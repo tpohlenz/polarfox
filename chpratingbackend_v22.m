@@ -1,5 +1,14 @@
 function result = chpratingbackend_v21(input)
 
+% Column renaming from total profit to Contributuion Margin
+% (Deckungsbeitrag) - Short: CM
+
+% TM1_1 - total margin with heat revenue & electricity revenue 
+% TM1_2 - total margin with heat revenue, electricity revenue OR gas holder
+% usage
+% TM1_3 - total margin with heat revenue & electricity revenue OR storage
+% usage
+
 %% initial output table
 result = table;
 
@@ -11,15 +20,15 @@ result.heatdemand = HeatDemand(input.heatdemand.currentyear,input.heatdemand.max
 result.phase(:,1) = 0;
 result.newdemand(:,1) = 0;
 result.heatrevenue(:,1) = 0;
-result.marginalcost(:,1) = 0;
-result.remainingcost(:,1) = 0;
+result.variablecost(:,1) = 0;
+result.CM_th(:,1) = 0;
 result.eexprice = input.market.electricity.currentyear;
-result.profit(:,1) = 0;
+result.CM_el(:,1) = 0;
 result.storagelevel (:,1) = 0; 
 result.gasholder(:,1) = 0; 
-result.totalprofit(:,1) = 0;
-result.totalprofit1(:,1) = 0;
-result.totalprofit2(:,1) = 0;
+result.TM1_1(:,1) = 0;
+result.TM1_2(:,1) = 0;
+result.TM1_3(:,1) = 0;
 result.usage(:,1) = 0;
 
 % get partial load powerlevel informations
@@ -43,35 +52,35 @@ result.heatrevenue(result.phase==phase1.powerlevel) = (phase1.th_efficiency/phas
 result.heatrevenue(result.phase==phase2.powerlevel) = (phase2.th_efficiency/phase2.el_efficiency) * result.newdemand(result.phase==phase2.powerlevel) * input.market.heatprice;
 result.heatrevenue(result.phase==phase3.powerlevel) = (phase3.th_efficiency/phase3.el_efficiency) * result.newdemand(result.phase==phase3.powerlevel) * input.market.heatprice;
 
-% calculate marginalcost
-result.marginalcost(result.phase==phase1.powerlevel) = input.market.gasprice/phase1.el_efficiency;
-result.marginalcost(result.phase==phase2.powerlevel) = input.market.gasprice/phase2.el_efficiency;
-result.marginalcost(result.phase==phase3.powerlevel) = input.market.gasprice/phase3.el_efficiency;
+% calculate variablecost
+result.variablecost(result.phase==phase1.powerlevel) = input.market.gasprice/phase1.el_efficiency;
+result.variablecost(result.phase==phase2.powerlevel) = input.market.gasprice/phase2.el_efficiency;
+result.variablecost(result.phase==phase3.powerlevel) = input.market.gasprice/phase3.el_efficiency;
 
-% calculate remainingcost --> equal to marginal cost for electricity 
-result.remainingcost = result.marginalcost - result.heatrevenue;
+% calculate CM_th --> equal to marginal cost for electricity 
+result.CM_th = result.heatrevenue - result.variablecost;
 
-% calculate profit
-result.profit =  result.eexprice - result.remainingcost;
+% calculate CM_el
+result.CM_el =  result.eexprice + result.CM_th;
         
-%% calculate total profit
-result.totalprofit(result.phase==phase1.powerlevel) = result.profit(result.phase==phase1.powerlevel) * input.plant.partialload.phase1.powerlevel * input.plant.peakpower;
-result.totalprofit(result.phase==phase2.powerlevel) = result.profit(result.phase==phase2.powerlevel) * input.plant.partialload.phase2.powerlevel * input.plant.peakpower;
-result.totalprofit(result.phase==phase3.powerlevel) = result.profit(result.phase==phase3.powerlevel) * input.plant.partialload.phase3.powerlevel * input.plant.peakpower;
+%% calculate total margin without storage
+result.TM1_1(result.phase==phase1.powerlevel) = result.CM_el(result.phase==phase1.powerlevel) * input.plant.partialload.phase1.powerlevel * input.plant.peakpower;
+result.TM1_1(result.phase==phase2.powerlevel) = result.CM_el(result.phase==phase2.powerlevel) * input.plant.partialload.phase2.powerlevel * input.plant.peakpower;
+result.TM1_1(result.phase==phase3.powerlevel) = result.CM_el(result.phase==phase3.powerlevel) * input.plant.partialload.phase3.powerlevel * input.plant.peakpower;
 
 %% add gas holder 
-% initial totalprofit1
-result.totalprofit1 = result.totalprofit;
+% initial TM1_2
+result.TM1_2 = result.TM1_1;
 
 % calculate
 result.gasholder(:,1) = input.market.gasprice/input.gasholder.efficiency;
 gasholdercosts = input.market.heatprice - input.market.gasprice/input.gasholder.efficiency;
 
-result.totalprofit1(result.profit < gasholdercosts) = result.heatdemand(result.profit < gasholdercosts) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * gasholdercosts;
+result.TM1_2(result.CM_el < gasholdercosts) = result.heatdemand(result.CM_el < gasholdercosts) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * gasholdercosts;
 
 %% add storagelevel 
 % inital toalprofit2
-result.totalprofit2(:,1) = 0;
+result.TM1_3 = result.TM1_2;
 
 % calculate
 result.storagelevel(1) = 0.5;
@@ -86,26 +95,26 @@ result.storagelevel(1) = 0.5;
             case input.plant.partialload.phase3.powerlevel
                 phase = input.plant.partialload.phase3;
         end
-        % charge storage if profit is positive
-        if (result.profit(i)>0) && (result.storagelevel(i-1) < 1)
+        % charge storage if CM_el is positive
+        if (result.CM_el(i)>0) && (result.storagelevel(i-1) < 1)
             result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity;
             if result.storagelevel(i) > 1
                 result.storagelevel(i) = 1;
             end
             
-        % neither charge nor discharge if profit is positive and the
+        % neither charge nor discharge if CM_el is positive and the
         % storage is full
-        elseif (result.profit(i)>0) && (result.storagelevel(i-1) >= 1)
+        elseif (result.CM_el(i)>0) && (result.storagelevel(i-1) >= 1)
             result.storagelevel(i) = result.storagelevel(i-1); 
             
-        % discharge storage if profit is negative  -> only if storage can
+        % discharge storage if CM_el is negative  -> only if storage can
         % supply demand completly 
-        elseif (result.profit(i)<0) && ((result.storagelevel(i-1) * input.storage.capacity) >= (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency)))
+        elseif (result.CM_el(i)<0) && ((result.storagelevel(i-1) * input.storage.capacity) >= (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency)))
             result.storagelevel(i) = result.storagelevel(i-1) - (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency))/input.storage.capacity;
-            result.totalprofit2(i) = result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * input.market.heatprice;
+            result.TM1_3(i) = result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * input.market.heatprice;
             % result.usage(i) = 3;
             
-        % old: charge storage if profit is negative but the storage level is to low  
+        % old: charge storage if CM_el is negative but the storage level is to low  
         % new: use gas holder instead 
         else
             
