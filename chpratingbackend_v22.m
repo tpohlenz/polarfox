@@ -81,52 +81,80 @@ result.TM1_1(result.phase==phase3.powerlevel) = result.CM_el(result.phase==phase
 %% add storagelevel 
 % inital toalprofit2
 result.TM1_3 = result.TM1_1;
+if (input.storage.capacity > 0)
+    % Initial storage level
+    result.storagelevel(1) = 0.5;
+        for i = 2:height(result)
+            switch result.phase(i)
+                case input.plant.partialload.phase1.powerlevel
+                    phase = input.plant.partialload.phase1;
 
-% calculate
-result.storagelevel(1) = 0.5;
-    for i = 2:height(result)
-        switch result.phase(i)
-            case input.plant.partialload.phase1.powerlevel
-                phase = input.plant.partialload.phase1;
-                
-            case input.plant.partialload.phase2.powerlevel
-                phase = input.plant.partialload.phase2;
-                
-            case input.plant.partialload.phase3.powerlevel
-                phase = input.plant.partialload.phase3;
-        end
-        % charge storage if CM_el is positive
-        if (result.CM_el(i)>0) && (result.storagelevel(i-1) < 1)
-            result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity;
-            if result.storagelevel(i) > 1
+                case input.plant.partialload.phase2.powerlevel
+                    phase = input.plant.partialload.phase2;
+
+                case input.plant.partialload.phase3.powerlevel
+                    phase = input.plant.partialload.phase3;
+            end
+            % i = i
+            % if i == 24
+            %    x = 1
+            % end
+
+            %% charge storage if CM_el is positive
+            if (result.CM_el(i) >= 0)
+                input.plant.state(1,1) = 1; % turn on power plant 
+                result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity;
+                if result.storagelevel(i) >= 1
+                    result.storagelevel(i) = 1;
+                end
+
+            % neither charge nor discharge if CM_el is positive and the
+            % storage is full
+            % elseif (result.CM_el(i)>0) && (result.storagelevel(i-1) >= 1)
+            %    input.plant.state(1,1) = 1; % turn on power plant
+            %    result.storagelevel(i) = result.storagelevel(i-1); 
+
+            % discharge storage if CM_el is negative and storage can
+            % supply demand completly and TurnOn Costs are lower then the loss
+
+            %% charge storage if CM_el is negative but the storage level is to low  
+            elseif (result.CM_el(i) < 0) && ((result.storagelevel(i-1) * input.storage.capacity) < (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency)))   
+                input.plant.state(1,1) = 1;
+                result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity; 
+                if result.storagelevel(i) > 1
                 result.storagelevel(i) = 1;
-            end
-            
-        % neither charge nor discharge if CM_el is positive and the
-        % storage is full
-        elseif (result.CM_el(i)>0) && (result.storagelevel(i-1) >= 1)
-            result.storagelevel(i) = result.storagelevel(i-1); 
-            
-        % discharge storage if CM_el is negative  -> only if storage can
-        % supply demand completly 
-        elseif (result.CM_el(i)<0) && ((result.storagelevel(i-1) * input.storage.capacity) >= (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency)))
-            result.storagelevel(i) = result.storagelevel(i-1) - (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency))/input.storage.capacity;
-            result.TM1_3(i) = result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * input.market.heatprice;
-            result.usage(i) = {'storage'};
-            
-        % old: charge storage if CM_el is negative but the storage level is to low  
-        % new: use gas holder instead --> deactivated
-        else
-            
-            result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity; 
-            if result.storagelevel(i) > 1
-            result.storagelevel(i) = 1;
-            end
-        
-        end
-    end
-    
+                end
 
+            %% discharge storage if loss is higer then turnon costs      
+            else % for the elseif condition: (result.CM_el(i) < 0) && ((result.storagelevel(i-1) * input.storage.capacity) >= (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency)))
+                k = 0;
+                sumTM1_1 = 0;
+                % calculate cumulated loss
+                while result.CM_el(i+k) <= 0
+                    sumTM1_1 = sumTM1_1 + result.TM1_1(i+k);
+                    if i + k >= height(result)
+                        break
+                    end 
+                    k = k + 1;
+                end
+
+                % check if cumulated loss is higher then turn on costs     
+                if abs(sumTM1_1) > input.plant.turnon % discharge storage 
+                    input.plant.state(1,1) = 0;
+                    result.storagelevel(i) = result.storagelevel(i-1) - (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency))/input.storage.capacity;
+                    result.TM1_3(i) = result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * input.market.heatprice;
+                    result.usage(i) = {'storage'};
+                else % charge storage beacause loss is lower then turnon costs
+                    input.plant.state(1,1) = 1;
+                    result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity; 
+                    if result.storagelevel(i) > 1
+                        result.storagelevel(i) = 1;
+                    end
+                end       
+            end
+        end
+end
+    
 end
 
 
