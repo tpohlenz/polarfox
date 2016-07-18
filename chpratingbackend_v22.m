@@ -1,7 +1,11 @@
-function result = chpratingbackend_v21(input)
+function result = chpratingbackend_v22(input)
 
 % Column renaming from total profit to Contributuion Margin
 % (Deckungsbeitrag) - Short: CM
+
+% 1 = CHP
+% 2 = gas holder 
+% 3 = storage
 
 % TM1_1 - total margin with heat revenue & electricity revenue 
 % TM1_2 - total margin with heat revenue, electricity revenue OR gas holder
@@ -29,7 +33,7 @@ result.gasholder(:,1) = 0;
 result.TM1_1(:,1) = 0;
 result.TM1_2(:,1) = 0;
 result.TM1_3(:,1) = 0;
-result.usage(:,1) = {'CHP'};
+result.usage(:,1) = 1;  % equal to CHP 
 
 % get partial load powerlevel informations
 phase1 = input.plant.partialload.phase1;
@@ -100,7 +104,7 @@ if (input.storage.capacity > 0)
             %    x = 1
             % end
 
-            %% charge storage if CM_el is positive
+            %% charge storage if CM_el is positive or equal 0
             if (result.CM_el(i) >= 0)
                 input.plant.state(1,1) = 1; % turn on power plant 
                 result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity;
@@ -139,12 +143,13 @@ if (input.storage.capacity > 0)
                 end
 
                 % check if cumulated loss is higher then turn on costs     
-                if abs(sumTM1_1) > input.plant.turnon % discharge storage 
+                if abs(sumTM1_1) > input.plant.startup % discharge storage 
                     input.plant.state(1,1) = 0;
                     result.storagelevel(i) = result.storagelevel(i-1) - (result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency))/input.storage.capacity;
                     result.TM1_3(i) = result.heatdemand(i) * input.plant.peakpower * (phase1.th_efficiency/phase1.el_efficiency) * input.market.heatprice;
-                    result.usage(i) = {'storage'};
-                else % charge storage beacause loss is lower then turnon costs
+                    result.usage(i) = 3; % equal to storage
+                % charge storage beacause loss is lower then turnon costs
+                else 
                     input.plant.state(1,1) = 1;
                     result.storagelevel(i) = result.storagelevel(i-1) + ((1-result.newdemand(i)) * phase.powerlevel * input.plant.peakpower * (phase.th_efficiency/phase.el_efficiency))/input.storage.capacity; 
                     if result.storagelevel(i) > 1
