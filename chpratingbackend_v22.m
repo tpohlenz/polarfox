@@ -11,6 +11,9 @@ function result = chpratingbackend_v22(input)
 %% initial output table
 result = table;
 
+%% import Date 
+result.date = input.market.electricity.rawData.EEXDayAhead.Date(input.market.electricity.rawData.EEXDayAhead.Date.Year == input.year)
+
 %% calculate heat demand 
 result.heatdemand = HeatDemand(input.heatdemand.currentyear,input.heatdemand.maxtemperature,input.heatdemand.mintemperature);
 
@@ -22,24 +25,29 @@ result.newdemand(:,1) = 0;
 result.heatrevenue(:,1) = 0;
 result.variablecost(:,1) = 0;
 result.CM_th(:,1) = 0;
-result.eexprice = input.market.electricity.currentyear;
+result.raw_eexprice = input.market.electricity.currentyear;
+result.funding(:,1) = input.market.funding; 
+result.eexprice(:,1) = 0;
 result.CM_el(:,1) = 0;
 result.gasholder_profit(:,1) = 0; 
 result.abs_heatdemand(:,1) = 0;
-result.storagelevel (:,1) = 0; 
+result.storagelevel (:,1) = 0;
+result.lostheat(:,1) = 0;
+result.lostratio(:,1) = 0;
+result.lostamount(:,1) = 0;
+
 result.TM1_1(:,1) = 0;
 result.TM1_2(:,1) = 0;
 result.TM1_3(:,1) = 0;
-result.cum_loss(:,1) = 0;
+
 result.cum_loss1(:,1) = 0;
 result.cum_loss2(:,1) = 0;
 result.cum_loss3(:,1) = 0;
-result.cum_loss4(:,1) = 0;
 result.usage(:,1) = 1;
 
 %% Add CHP funding
-if isnumeric(input.market.electricity.funding) == 1 
-    result.eexprice = result.eexprice + input.market.electricity.funding;
+if isnumeric(input.market.funding) == 1 
+    result.eexprice = result.raw_eexprice + result.funding;
 end
 
 %% get partial load powerlevel informations
@@ -97,49 +105,13 @@ result.TM1_1(result.phase == phase3.powerlevel) = result.CM_el(result.phase == p
 result.gasholder_profit(:,1) = input.market.heatprice - (input.market.gasprice / input.gasholder.efficiency);
 
 %% calculate cum_loss
-% for i = (height(result)-1):-1:1
-%     if result.TM1_1(i) <= 0 
-%         if result.cum_loss(i+1) < 0
-%             result.cum_loss(i) = result.cum_loss(i+1) + result.TM1_1(i); 
-%         else
-%             result.cum_loss(i) = result.TM1_1(i);
-%         end
-%     else
-%         if result.cum_loss(i+1) >= 0 
-%            result.cum_loss(i) = result.cum_loss(i+1) + result.TM1_1(i); 
-%         else
-%            result.cum_loss(i) = result.TM1_1(i);
-%         end
-%     end
-% end
- % cum_loss1
-% n = 0; % n stands for negative numbers
-% p = 0; % p stands for positive numbers
-% for i = 1:height(result) 
-%     switch sign(result.cum_loss(i))
-%         case -1
-%             if p > 0 
-%                 result.cum_loss1(i-p:i-1) = result.cum_loss(i-p);
-%                 p = 0;
-%             end
-%             n = n + 1;
-%         case {0, 1}
-%             if n > 0
-%                 result.cum_loss1(i-n:i-1) = result.cum_loss(i-n);
-%                 n = 0;
-%             end
-%             p = p + 1;
-%     end
-% end 
-
-% cum_loss2
 % Optimazitaion Forecast: 10 hours 
 helpArray = result.gasholder_profit .* result.abs_heatdemand;
 
 for i = 1:height(result)-10
-    result.cum_loss2(i) = sum(result.TM1_1(i:i+10),'omitnan');
-    result.cum_loss3(i) = sum(helpArray(i:i+10),'omitnan');
-    result.cum_loss4(i) = sum(result.abs_heatdemand(i:i+10) * input.market.heatprice,'omitnan'); 
+    result.cum_loss1(i) = sum(result.TM1_1(i:i+10),'omitnan');
+    result.cum_loss2(i) = sum(helpArray(i:i+10),'omitnan');
+    result.cum_loss3(i) = sum(result.abs_heatdemand(i:i+10) * input.market.heatprice,'omitnan'); 
 end
 
 
